@@ -1,13 +1,41 @@
 """
 婚姻数据生成模块 - 基于真实统计趋势生成模拟数据
+使用确定性哈希函数确保相同参数永远返回相同结果
 """
-import random
+import hashlib
 import math
 from datetime import date, timedelta
 import numpy as np
 
-random.seed(42)
 np.random.seed(42)
+
+
+def deterministic_hash(*args) -> int:
+    """基于输入参数生成确定性哈希值（整数）"""
+    key = "|".join(str(a) for a in args)
+    return int(hashlib.md5(key.encode('utf-8')).hexdigest(), 16)
+
+
+def deterministic_uniform(seed_str: str, min_val: float, max_val: float, index: int = 0) -> float:
+    """
+    生成确定性的均匀分布随机数
+    seed_str: 种子字符串（如参数组合）
+    min_val, max_val: 取值范围
+    index: 用于区分同一参数下多次调用的索引
+    """
+    h = deterministic_hash(seed_str, index)
+    normalized = (h % 1000000) / 1000000.0
+    return min_val + normalized * (max_val - min_val)
+
+
+def deterministic_variation(base_value: float, variation_pct: float, *seed_parts) -> float:
+    """
+    基于 base_value 生成确定性的波动值
+    variation_pct: 波动幅度（如 0.1 表示 ±10%）
+    """
+    factor = deterministic_uniform("|".join(str(s) for s in seed_parts),
+                                   1 - variation_pct, 1 + variation_pct)
+    return base_value * factor
 
 # 近10年的基础数据（基于真实趋势模拟）
 BASELINE_DATA = {
@@ -65,6 +93,15 @@ PROVINCES = [
 EDUCATION_LEVELS = ["小学及以下", "初中", "高中/中专", "大专", "本科", "硕士", "博士"]
 
 AGE_GROUPS = ["20岁以下", "20-24岁", "25-29岁", "30-34岁", "35-39岁", "40岁以上"]
+
+REGION_SEED_MAP = {
+    None: 0,
+    "all": 0,
+    "east": 1,
+    "central": 2,
+    "west": 3,
+    "northeast": 4,
+}
 
 
 def get_core_metrics(year: int = 2024) -> dict:
@@ -154,6 +191,7 @@ def get_heatmap_data(year: int, data_type: str = "marriage") -> dict:
     min_count = float('inf')
     
     special_list = special_days.get(data_type, [])
+    day_index = 0
     
     while current_date <= end_date:
         month = current_date.month
@@ -180,8 +218,9 @@ def get_heatmap_data(year: int, data_type: str = "marriage") -> dict:
                 peak_type = stype
                 break
         
-        # 随机性
-        count *= random.uniform(0.85, 1.15)
+        # 确定性波动（基于日期，结果永远一致）
+        variation = deterministic_uniform(f"heatmap:{year}:{data_type}", 0.85, 1.15, day_index)
+        count *= variation
         
         count = round(count, 0)
         max_count = max(max_count, count)
@@ -196,6 +235,7 @@ def get_heatmap_data(year: int, data_type: str = "marriage") -> dict:
         })
         
         current_date += timedelta(days=1)
+        day_index += 1
     
     return {
         "year": year,
@@ -239,9 +279,14 @@ def get_age_distribution(year: int = 2024) -> list:
     year_data = BASELINE_DATA.get(year, BASELINE_DATA[2024])
     total_marriages = year_data["marriage_count"] * 10000
     
+    # 确定性中位数年龄波动（±1岁）
+    median_variation_male = deterministic_uniform(f"age:male:{year}", -1.0, 1.0, 0)
+    median_variation_female = deterministic_uniform(f"age:female:{year}", -1.0, 1.0, 0)
+    
     result = []
-    for gender in ["male", "female"]:
+    for gender_idx, gender in enumerate(["male", "female"]):
         percentages = male_percentages if gender == "male" else female_percentages
+        median_var = median_variation_male if gender == "male" else median_variation_female
         age_groups = []
         sum_percent = 0
         
@@ -265,14 +310,14 @@ def get_age_distribution(year: int = 2024) -> list:
             "gender": gender,
             "ageGroups": age_groups,
             "averageAge": round(avg_age, 1),
-            "medianAge": round(avg_age + random.uniform(-1, 1), 1),
+            "medianAge": round(avg_age + median_var, 1),
         })
     
     return result
 
 
 def get_regions(level: str = "province", region_filter: str = None) -> list:
-    """获取地域数据"""
+    """获取地域数据 - 使用确定性算法，相同参数永远返回相同结果"""
     national_marriage_rate = BASELINE_DATA[2024]["marriage_rate"]
     national_divorce_rate = BASELINE_DATA[2024]["divorce_rate"]
     
@@ -292,9 +337,11 @@ def get_regions(level: str = "province", region_filter: str = None) -> list:
             
         factor = region_factors[prov["region"]]
         
-        # 添加一些随机性
-        random_factor_m = random.uniform(0.9, 1.1)
-        random_factor_d = random.uniform(0.85, 1.15)
+        # 使用省份代码作为确定性种子的一部分
+        seed_key_marriage = f"region:m:{prov['code']}:{region_filter or 'all'}"
+        seed_key_divorce = f"region:d:{prov['code']}:{region_filter or 'all'}"
+        random_factor_m = deterministic_uniform(seed_key_marriage, 0.9, 1.1, 0)
+        random_factor_d = deterministic_uniform(seed_key_divorce, 0.85, 1.15, 0)
         
         marriage_rate = round(national_marriage_rate * factor["marriage"] * random_factor_m, 2)
         divorce_rate = round(national_divorce_rate * factor["divorce"] * random_factor_d, 2)
@@ -330,7 +377,7 @@ def get_region_detail(code: str) -> dict:
 
 
 def get_education_data(year: int = 2024) -> list:
-    """获取教育程度数据"""
+    """获取教育程度数据 - 使用确定性算法"""
     # 教育程度离婚率（越高学历离婚率相对越低，但有波动）
     base_divorce_rates = {
         "小学及以下": 2.8,
@@ -358,10 +405,17 @@ def get_education_data(year: int = 2024) -> list:
     total_marriages = BASELINE_DATA[year]["marriage_count"] if year in BASELINE_DATA else BASELINE_DATA[2024]["marriage_count"]
     
     result = []
-    for edu_level in EDUCATION_LEVELS:
-        divorce_rate = round(base_divorce_rates[edu_level] * year_factor * random.uniform(0.95, 1.05), 2)
+    for edu_idx, edu_level in enumerate(EDUCATION_LEVELS):
+        # 确定性波动
+        divorce_var_seed = f"edu:d:{year}:{edu_level}"
+        sig_seed = f"edu:sig:{year}:{edu_level}"
+        divorce_rate = round(base_divorce_rates[edu_level] * year_factor
+                             * deterministic_uniform(divorce_var_seed, 0.95, 1.05, 0), 2)
         sample_size = round(total_marriages * population_pct[edu_level] / 100 * 10000)
         divorce_count = round(sample_size * divorce_rate / 1000)
+        significance = round(deterministic_uniform(sig_seed, 0.01, 0.05, 0), 3)
+        lower_ci = round(divorce_rate * 0.9, 2)
+        upper_ci = round(divorce_rate * 1.1, 2)
         
         result.append({
             "year": year,
@@ -370,9 +424,9 @@ def get_education_data(year: int = 2024) -> list:
             "divorceCount": round(divorce_count, 1),
             "divorceRate": divorce_rate,
             "sampleSize": sample_size,
-            "significance": round(random.uniform(0.01, 0.05), 3),
-            "lowerCI": round(divorce_rate * 0.9, 2),
-            "upperCI": round(divorce_rate * 1.1, 2),
+            "significance": significance,
+            "lowerCI": lower_ci,
+            "upperCI": upper_ci,
         })
     
     return result

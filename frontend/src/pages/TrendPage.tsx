@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
+import { Download, TrendingUp, Calendar, BarChart3, AlertTriangle } from 'lucide-react';
 import TrendChart from '@/components/charts/TrendChart';
 import { trendApi } from '@/services/api';
 import type { AnnualTrend, PolicyNode } from '@/types';
@@ -11,8 +11,21 @@ const TrendPage = () => {
   const [endYear, setEndYear] = useState(2024);
   const [loading, setLoading] = useState(true);
   const [showForecast, setShowForecast] = useState(false);
+  const [yearError, setYearError] = useState<string>('');
 
   useEffect(() => {
+    if (startYear > endYear) {
+      setYearError(`开始年份(${startYear}年)不能大于结束年份(${endYear}年)，已自动调整为${endYear}年-${startYear}年`);
+      const newStart = Math.min(startYear, endYear);
+      const newEnd = Math.max(startYear, endYear);
+      setStartYear(newStart);
+      setEndYear(newEnd);
+      setTimeout(() => {
+        setYearError('');
+      }, 3000);
+      return;
+    }
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -33,6 +46,30 @@ const TrendPage = () => {
   }, [startYear, endYear]);
 
   const years = Array.from({ length: 10 }, (_, i) => 2015 + i);
+  const startYearOptions = years.slice(0, -1);
+  const endYearOptions = years.slice(1);
+
+  const handleStartYearChange = (newYear: number) => {
+    if (newYear > endYear) {
+      setYearError(`开始年份(${newYear}年)不能大于结束年份(${endYear}年)，已自动调整结束年份`);
+      setEndYear(newYear);
+      setTimeout(() => setYearError(''), 3000);
+    } else {
+      setYearError('');
+    }
+    setStartYear(newYear);
+  };
+
+  const handleEndYearChange = (newYear: number) => {
+    if (newYear < startYear) {
+      setYearError(`结束年份(${newYear}年)不能小于开始年份(${startYear}年)，已自动调整开始年份`);
+      setStartYear(newYear);
+      setTimeout(() => setYearError(''), 3000);
+    } else {
+      setYearError('');
+    }
+    setEndYear(newYear);
+  };
 
   const handleExportCSV = () => {
     if (trendData.length === 0) return;
@@ -76,34 +113,42 @@ const TrendPage = () => {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-gray-500" />
-              <span className="text-sm text-gray-600">年份范围：</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar size={16} className="text-gray-500" />
+                <span className="text-sm text-gray-600">年份范围：</span>
+              </div>
+              <select
+                value={startYear}
+                onChange={(e) => handleStartYearChange(Number(e.target.value))}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {startYearOptions.map((year) => (
+                  <option key={year} value={year} disabled={year > endYear}>
+                    {year}年
+                  </option>
+                ))}
+              </select>
+              <span className="text-gray-400">至</span>
+              <select
+                value={endYear}
+                onChange={(e) => handleEndYearChange(Number(e.target.value))}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {endYearOptions.map((year) => (
+                  <option key={year} value={year} disabled={year < startYear}>
+                    {year}年
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={startYear}
-              onChange={(e) => setStartYear(Number(e.target.value))}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {years.slice(0, -1).map((year) => (
-                <option key={year} value={year}>
-                  {year}年
-                </option>
-              ))}
-            </select>
-            <span className="text-gray-400">至</span>
-            <select
-              value={endYear}
-              onChange={(e) => setEndYear(Number(e.target.value))}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {years.slice(1).map((year) => (
-                <option key={year} value={year}>
-                  {year}年
-                </option>
-              ))}
-            </select>
+            {yearError && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle size={16} className="text-amber-500" />
+                <span className="text-sm text-amber-700">{yearError}</span>
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">

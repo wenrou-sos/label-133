@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MapPin, ArrowDownUp, Filter, BarChart3 } from 'lucide-react';
+import { MapPin, ArrowDownUp, Filter, BarChart3, X, TrendingUp, TrendingDown, Users } from 'lucide-react';
 import RegionBarChart from '@/components/charts/RegionBarChart';
 import { regionApi } from '@/services/api';
 import type { RegionData } from '@/types';
@@ -16,6 +16,7 @@ const RegionPage = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showType, setShowType] = useState<ShowType>('both');
   const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [drillDownRegion, setDrillDownRegion] = useState<RegionData | null>(null);
   const drillLevel = 'province' as const;
 
   useEffect(() => {
@@ -35,10 +36,7 @@ const RegionPage = () => {
   }, [drillLevel, selectedRegion]);
 
   const handleBarClick = (region: RegionData) => {
-    if (drillLevel === 'province') {
-      // 可以下钻到市级（暂用相同数据模拟）
-      console.log('Clicked:', region.name);
-    }
+    setDrillDownRegion(region);
   };
 
   const toggleSort = (field: SortField) => {
@@ -56,6 +54,8 @@ const RegionPage = () => {
   const avgDivorce = regions.length > 0
     ? (regions.reduce((sum, r) => sum + r.divorceRate, 0) / regions.length).toFixed(2)
     : '0';
+  const avgMarriageNum = parseFloat(avgMarriage);
+  const avgDivorceNum = parseFloat(avgDivorce);
 
   return (
     <div className="space-y-6">
@@ -239,6 +239,110 @@ const RegionPage = () => {
           </div>
         </div>
       </div>
+
+      {drillDownRegion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+              <h3 className="text-xl font-bold text-gray-800">
+                {drillDownRegion.name}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {REGION_NAMES[drillDownRegion.region as keyof typeof REGION_NAMES]}地区
+              </p>
+              </div>
+              <button
+                onClick={() => setDrillDownRegion(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp size={16} className="text-blue-500" />
+                    <span className="text-sm text-blue-600 font-medium">结婚率</span>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-700">
+                    {drillDownRegion.marriageRate}‰
+                  </div>
+                  <div className="text-xs text-blue-500 mt-1">
+                    结婚登记 {drillDownRegion.marriageCount.toLocaleString()} 万对
+                  </div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingDown size={16} className="text-amber-500" />
+                    <span className="text-sm text-amber-600 font-medium">离婚率</span>
+                  </div>
+                  <div className="text-2xl font-bold text-amber-700">
+                    {drillDownRegion.divorceRate}‰
+                  </div>
+                  <div className="text-xs text-amber-500 mt-1">
+                    离婚登记 {drillDownRegion.divorceCount.toLocaleString()} 万对
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={16} className="text-gray-500" />
+                  <span className="text-sm text-gray-600 font-medium">人口规模</span>
+                </div>
+                <div className="text-xl font-bold text-gray-700">
+                  {drillDownRegion.population.toLocaleString()} 万人
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-800">与全国平均对比</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">结婚率对比</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500"
+                          style={{ width: `${Math.min(100, (drillDownRegion.marriageRate / avgMarriageNum) * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-medium ${drillDownRegion.marriageRate >= avgMarriageNum ? 'text-green-600' : 'text-red-500'}`}>
+                        {drillDownRegion.marriageRate >= avgMarriageNum ? '↑' : '↓'} 
+                        {(Math.abs((drillDownRegion.marriageRate - avgMarriageNum) / avgMarriageNum * 100)).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">离婚率对比</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500"
+                          style={{ width: `${Math.min(100, (drillDownRegion.divorceRate / avgDivorceNum) * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-medium ${drillDownRegion.divorceRate <= avgDivorceNum ? 'text-green-600' : 'text-red-500'}`}>
+                        {drillDownRegion.divorceRate <= avgDivorceNum ? '↓' : '↑'} 
+                        {(Math.abs((drillDownRegion.divorceRate - avgDivorceNum) / avgDivorceNum * 100)).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <p className="text-xs text-gray-500 text-center">
+                  全国平均结婚率 {avgMarriage}‰，平均离婚率 {avgDivorce}‰
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
