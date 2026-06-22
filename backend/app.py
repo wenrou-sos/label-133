@@ -9,6 +9,7 @@ from routes.heatmap_routes import heatmap_bp
 from routes.age_routes import age_bp
 from routes.region_routes import region_bp
 from routes.education_routes import education_bp
+from routes.crosstab_routes import crosstab_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -18,6 +19,7 @@ app.register_blueprint(heatmap_bp)
 app.register_blueprint(age_bp)
 app.register_blueprint(region_bp)
 app.register_blueprint(education_bp)
+app.register_blueprint(crosstab_bp)
 
 
 @app.route('/api/health')

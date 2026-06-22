@@ -8,6 +8,9 @@ import type {
   RegionData,
   EducationData,
   CorrelationResult,
+  CrosstabData,
+  CrosstabDim,
+  CrosstabMetric,
 } from '@/types';
 
 const api = axios.create({
@@ -55,6 +58,16 @@ export const educationApi = {
 
   getCorrelation: (): Promise<CorrelationResult> =>
     api.get('/education/correlation').then((res) => res.data),
+};
+
+export const crosstabApi = {
+  getCrosstab: (
+    dimX: CrosstabDim,
+    dimY: CrosstabDim,
+    year?: number,
+    metric?: CrosstabMetric
+  ): Promise<CrosstabData> =>
+    api.get('/crosstab', { params: { dimX, dimY, year, metric } }).then((res) => res.data),
 };
 
 export default api;

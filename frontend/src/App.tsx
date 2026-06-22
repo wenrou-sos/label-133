@@ -5,6 +5,7 @@ import HeatmapPage from '@/pages/HeatmapPage';
 import AgePage from '@/pages/AgePage';
 import RegionPage from '@/pages/RegionPage';
 import EducationPage from '@/pages/EducationPage';
+import CrossPage from '@/pages/CrossPage';
 import { useAppStore } from '@/store/useAppStore';
 
 function App() {
@@ -24,6 +25,8 @@ function App() {
         return <RegionPage />;
       case 'education':
         return <EducationPage />;
+      case 'crosstab':
+        return <CrossPage />;
       default:
         return <OverviewPage />;
     }

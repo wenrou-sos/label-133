@@ -441,3 +441,159 @@ def get_education_correlation() -> dict:
         "rSquared": 0.61,
         "interpretation": "教育程度与离婚率呈显著负相关，即学历越高，离婚率相对越低。"
     }
+
+
+REGION_LABELS = {
+    "east": "东部地区",
+    "central": "中部地区",
+    "west": "西部地区",
+    "northeast": "东北地区",
+}
+
+CROSS_DIMENSIONS = ["age", "education", "region"]
+
+
+def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "divorceRate") -> dict:
+    """
+    获取两个维度的交叉分析数据
+    dim_x / dim_y: "age" | "education" | "region"
+    metric: "divorceRate" | "marriageRate"
+    返回矩阵热力图所需格式
+    """
+    # 定义各维度类目
+    dim_categories = {
+        "age": AGE_GROUPS,
+        "education": EDUCATION_LEVELS,
+        "region": list(REGION_LABELS.keys()),
+    }
+    dim_labels = {
+        "age": AGE_GROUPS,
+        "education": EDUCATION_LEVELS,
+        "region": [REGION_LABELS[k] for k in REGION_LABELS.keys()],
+    }
+
+    if dim_x not in dim_categories or dim_y not in dim_categories:
+        return {"error": f"不支持的维度组合: {dim_x} × {dim_y}"}
+    if dim_x == dim_y:
+        return {"error": "请选择两个不同的维度进行交叉分析"}
+
+    x_cats = dim_categories[dim_x]
+    y_cats = dim_categories[dim_y]
+    x_labels = dim_labels[dim_x]
+    y_labels = dim_labels[dim_y]
+
+    # 基础离婚率矩阵（基于真实趋势的假设值）
+    # 教育程度索引（越高学历越低离婚率）
+    edu_divorce_base = {
+        "小学及以下": 3.2,
+        "初中": 2.9,
+        "高中/中专": 2.5,
+        "大专": 2.2,
+        "本科": 1.9,
+        "硕士": 1.7,
+        "博士": 1.5,
+    }
+    # 年龄段索引（中年离婚率最高）
+    age_divorce_base = {
+        "20岁以下": 1.8,
+        "20-24岁": 2.0,
+        "25-29岁": 2.3,
+        "30-34岁": 2.8,
+        "35-39岁": 3.0,
+        "40岁以上": 2.6,
+    }
+    # 地区索引
+    region_divorce_base = {
+        "east": 2.6,
+        "central": 2.2,
+        "west": 1.9,
+        "northeast": 3.4,
+    }
+    # 结婚率基准（用于 marriageRate 指标）
+    edu_marriage_base = {
+        "小学及以下": 6.5,
+        "初中": 6.0,
+        "高中/中专": 5.5,
+        "大专": 5.0,
+        "本科": 4.5,
+        "硕士": 4.2,
+        "博士": 4.0,
+    }
+    age_marriage_base = {
+        "20岁以下": 2.5,
+        "20-24岁": 8.5,
+        "25-29岁": 12.0,
+        "30-34岁": 4.5,
+        "35-39岁": 2.0,
+        "40岁以上": 1.0,
+    }
+    region_marriage_base = {
+        "east": 4.5,
+        "central": 5.3,
+        "west": 5.6,
+        "northeast": 4.0,
+    }
+
+    base_map_divorce = {
+        "age": age_divorce_base,
+        "education": edu_divorce_base,
+        "region": region_divorce_base,
+    }
+    base_map_marriage = {
+        "age": age_marriage_base,
+        "education": edu_marriage_base,
+        "region": region_marriage_base,
+    }
+    base_map = base_map_marriage if metric == "marriageRate" else base_map_divorce
+    x_base = base_map[dim_x]
+    y_base = base_map[dim_y]
+
+    # 年份因子
+    year_factor = 1 + (year - 2015) * 0.015
+
+    # 生成数据矩阵 [x_idx, y_idx, value]
+    data = []
+    max_val = 0.0
+    min_val = float("inf")
+
+    for xi, x_cat in enumerate(x_cats):
+        for yi, y_cat in enumerate(y_cats):
+            # 组合因子：取两维度平均值，加确定性波动
+            x_val = x_base.get(x_cat, 2.5)
+            y_val = y_base.get(y_cat, 2.5)
+            combo = (x_val + y_val) / 2.0 * year_factor
+
+            # 确定性波动
+            seed_key = f"crosstab:{dim_x}:{dim_y}:{year}:{metric}:{x_cat}:{y_cat}"
+            variation = deterministic_uniform(seed_key, 0.92, 1.08, 0)
+            value = round(combo * variation, 2)
+
+            data.append([xi, yi, value])
+            max_val = max(max_val, value)
+            min_val = min(min_val, value)
+
+    # 计算行/列均值用于辅助分析
+    row_means = []
+    for xi in range(len(x_cats)):
+        vals = [d[2] for d in data if d[0] == xi]
+        row_means.append(round(sum(vals) / len(vals), 2))
+    col_means = []
+    for yi in range(len(y_cats)):
+        vals = [d[2] for d in data if d[1] == yi]
+        col_means.append(round(sum(vals) / len(vals), 2))
+
+    return {
+        "year": year,
+        "dimX": dim_x,
+        "dimY": dim_y,
+        "metric": metric,
+        "xLabels": x_labels,
+        "yLabels": y_labels,
+        "xCategories": x_cats,
+        "yCategories": y_cats,
+        "data": data,
+        "minValue": round(min_val, 2),
+        "maxValue": round(max_val, 2),
+        "rowMeans": row_means,
+        "colMeans": col_means,
+    }

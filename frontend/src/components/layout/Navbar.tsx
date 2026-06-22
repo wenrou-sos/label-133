@@ -1,4 +1,4 @@
-import { Heart, TrendingUp, Calendar, Users, MapPin, GraduationCap, BarChart3 } from 'lucide-react';
+import { Heart, TrendingUp, Calendar, Users, MapPin, GraduationCap, BarChart3, GitCompare } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { TabKey } from '@/types';
 
@@ -9,6 +9,7 @@ const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'age', label: '年龄分布', icon: <Users size={18} /> },
   { key: 'region', label: '地域对比', icon: <MapPin size={18} /> },
   { key: 'education', label: '教育程度', icon: <GraduationCap size={18} /> },
+  { key: 'crosstab', label: '交叉分析', icon: <GitCompare size={18} /> },
 ];
 
 const Navbar = () => {

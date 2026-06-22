@@ -87,7 +87,27 @@ export interface CorrelationResult {
   interpretation: string;
 }
 
-export type TabKey = 'overview' | 'trend' | 'heatmap' | 'age' | 'region' | 'education';
+export type TabKey = 'overview' | 'trend' | 'heatmap' | 'age' | 'region' | 'education' | 'crosstab';
+
+export type CrosstabDim = 'age' | 'education' | 'region';
+export type CrosstabMetric = 'divorceRate' | 'marriageRate';
+
+export interface CrosstabData {
+  year: number;
+  dimX: CrosstabDim;
+  dimY: CrosstabDim;
+  metric: CrosstabMetric;
+  xLabels: string[];
+  yLabels: string[];
+  xCategories: string[];
+  yCategories: string[];
+  data: [number, number, number][];
+  minValue: number;
+  maxValue: number;
+  rowMeans: number[];
+  colMeans: number[];
+  error?: string;
+}
 
 export interface FilterOptions {
   year: number;
