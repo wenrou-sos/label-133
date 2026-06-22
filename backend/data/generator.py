@@ -455,10 +455,9 @@ CROSS_DIMENSIONS = ["age", "education", "region"]
 
 def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "divorceRate") -> dict:
     """
-    获取两个维度的交叉分析数据
+    获取两个维度的交叉分析数据（矩阵对称，与系统整体趋势一致）
     dim_x / dim_y: "age" | "education" | "region"
     metric: "divorceRate" | "marriageRate"
-    返回矩阵热力图所需格式
     """
     # 定义各维度类目
     dim_categories = {
@@ -482,8 +481,15 @@ def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "d
     x_labels = dim_labels[dim_x]
     y_labels = dim_labels[dim_y]
 
-    # 基础离婚率矩阵（基于真实趋势的假设值）
-    # 教育程度索引（越高学历越低离婚率）
+    # 离婚率基准（各维度单独的离婚率，‰）
+    age_divorce_base = {
+        "20岁以下": 1.8,
+        "20-24岁": 2.0,
+        "25-29岁": 2.3,
+        "30-34岁": 2.8,
+        "35-39岁": 3.0,
+        "40岁以上": 2.6,
+    }
     edu_divorce_base = {
         "小学及以下": 3.2,
         "初中": 2.9,
@@ -493,23 +499,22 @@ def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "d
         "硕士": 1.7,
         "博士": 1.5,
     }
-    # 年龄段索引（中年离婚率最高）
-    age_divorce_base = {
-        "20岁以下": 1.8,
-        "20-24岁": 2.0,
-        "25-29岁": 2.3,
-        "30-34岁": 2.8,
-        "35-39岁": 3.0,
-        "40岁以上": 2.6,
-    }
-    # 地区索引
     region_divorce_base = {
         "east": 2.6,
         "central": 2.2,
         "west": 1.9,
         "northeast": 3.4,
     }
-    # 结婚率基准（用于 marriageRate 指标）
+
+    # 结婚率基准（各维度单独的结婚率，‰）
+    age_marriage_base = {
+        "20岁以下": 2.5,
+        "20-24岁": 8.5,
+        "25-29岁": 12.0,
+        "30-34岁": 4.5,
+        "35-39岁": 2.0,
+        "40岁以上": 1.0,
+    }
     edu_marriage_base = {
         "小学及以下": 6.5,
         "初中": 6.0,
@@ -519,14 +524,6 @@ def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "d
         "硕士": 4.2,
         "博士": 4.0,
     }
-    age_marriage_base = {
-        "20岁以下": 2.5,
-        "20-24岁": 8.5,
-        "25-29岁": 12.0,
-        "30-34岁": 4.5,
-        "35-39岁": 2.0,
-        "40岁以上": 1.0,
-    }
     region_marriage_base = {
         "east": 4.5,
         "central": 5.3,
@@ -534,22 +531,28 @@ def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "d
         "northeast": 4.0,
     }
 
-    base_map_divorce = {
-        "age": age_divorce_base,
-        "education": edu_divorce_base,
-        "region": region_divorce_base,
-    }
-    base_map_marriage = {
-        "age": age_marriage_base,
-        "education": edu_marriage_base,
-        "region": region_marriage_base,
-    }
-    base_map = base_map_marriage if metric == "marriageRate" else base_map_divorce
-    x_base = base_map[dim_x]
-    y_base = base_map[dim_y]
+    # 合并为统一的基准查找表（与维度角色无关）
+    if metric == "divorceRate":
+        unified_base = {**age_divorce_base, **edu_divorce_base, **region_divorce_base}
+    else:
+        unified_base = {**age_marriage_base, **edu_marriage_base, **region_marriage_base}
 
-    # 年份因子
-    year_factor = 1 + (year - 2015) * 0.015
+    # 年份趋势因子（基于 BASELINE_DATA 的真实趋势插值）
+    # 离婚率：2015(2.8) → 2019(3.4, 峰值) → 2024(2.3)  先升后降
+    # 结婚率：2015(9.0) → 2024(4.9)  线性下降
+    # 以 2015 为基准计算相对比例
+    if metric == "divorceRate":
+        baseline_divorce = {2015: 2.8, 2019: 3.4, 2024: 2.3}
+        if year <= 2019:
+            ratio = (baseline_divorce[2015] + (baseline_divorce[2019] - baseline_divorce[2015]) * (year - 2015) / 4) / baseline_divorce[2015]
+        else:
+            ratio = (baseline_divorce[2019] + (baseline_divorce[2024] - baseline_divorce[2019]) * (year - 2019) / 5) / baseline_divorce[2015]
+    else:
+        baseline_marriage_2015 = 9.0
+        baseline_marriage_2024 = 4.9
+        target = baseline_marriage_2015 + (baseline_marriage_2024 - baseline_marriage_2015) * (year - 2015) / 9
+        ratio = target / baseline_marriage_2015
+    year_factor = ratio
 
     # 生成数据矩阵 [x_idx, y_idx, value]
     data = []
@@ -558,14 +561,17 @@ def get_crosstab_data(dim_x: str, dim_y: str, year: int = 2024, metric: str = "d
 
     for xi, x_cat in enumerate(x_cats):
         for yi, y_cat in enumerate(y_cats):
-            # 组合因子：取两维度平均值，加确定性波动
-            x_val = x_base.get(x_cat, 2.5)
-            y_val = y_base.get(y_cat, 2.5)
-            combo = (x_val + y_val) / 2.0 * year_factor
+            # 从统一基准表获取两个类别的基准值（与 x/y 角色无关）
+            a_val = unified_base.get(x_cat, 2.5)
+            b_val = unified_base.get(y_cat, 2.5)
 
-            # 确定性波动
-            seed_key = f"crosstab:{dim_x}:{dim_y}:{year}:{metric}:{x_cat}:{y_cat}"
-            variation = deterministic_uniform(seed_key, 0.92, 1.08, 0)
+            # 组合值：取几何平均值（比算术平均更合理，避免一端主导）
+            combo = math.sqrt(a_val * b_val) * year_factor
+
+            # 确定性波动：使用排序后的类目组合作为 seed，保证 (A,B) == (B,A)
+            sorted_cats = sorted([x_cat, y_cat])
+            seed_key = f"crosstab:pair:{metric}:{year}:{sorted_cats[0]}:{sorted_cats[1]}"
+            variation = deterministic_uniform(seed_key, 0.94, 1.06, 0)
             value = round(combo * variation, 2)
 
             data.append([xi, yi, value])

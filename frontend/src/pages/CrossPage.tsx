@@ -126,7 +126,7 @@ const CrossPage = () => {
             onChange={(e) => setYear(Number(e.target.value))}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
           >
-            {[2020, 2022, 2024].map((y) => (
+            {[2015, 2017, 2019, 2021, 2022, 2024].map((y) => (
               <option key={y} value={y}>
                 {y} 年
               </option>
